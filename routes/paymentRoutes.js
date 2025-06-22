@@ -2,7 +2,7 @@ const express = require('express');
 const Razorpay = require('razorpay');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
-const Booking = require('../models/Booking');
+
 const Payment = require('../models/Payment'); // ✅ Import your Payment model
 
 const razorpay = new Razorpay({
