@@ -13,14 +13,14 @@ const razorpay = new Razorpay({
 // ✅ Create Razorpay Order
 router.post('/create-order', authMiddleware, async (req, res) => {
   const { amount, currency = "INR", bookingId } = req.body;
-
+  
   try {
     const options = {
       amount: amount,
       currency,
       receipt: `receipt_${bookingId}`
     };
-
+   console.log(amount);
     const order = await razorpay.orders.create(options);
     res.status(200).json(order);
   } catch (err) {
