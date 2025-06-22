@@ -20,7 +20,8 @@ router.post('/create-order', authMiddleware, async (req, res) => {
       currency,
       receipt: `receipt_${bookingId}`
     };
-   console.log(amount);
+          console.log('Creating Razorpay Order with amount (paise):', amount);
+
     const order = await razorpay.orders.create(options);
     res.status(200).json(order);
   } catch (err) {
