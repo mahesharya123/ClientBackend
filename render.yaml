@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: coralcreek-backend
+    env: node
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGO_URI
+        value: your-mongodb-atlas-connection-string
+      - key: JWT_SECRET
+        value: your-jwt-secret-key
+      - key: NODE_ENV
+        value: production
