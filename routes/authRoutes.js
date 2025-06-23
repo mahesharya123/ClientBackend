@@ -114,7 +114,7 @@ router.post('/login', async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user)
-      return res.status(400).json({ error: 'User not found. Please register first.' });
+      return res.status(400).json({ error: 'User not found. Please Sign up.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)

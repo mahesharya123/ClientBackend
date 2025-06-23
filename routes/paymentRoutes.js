@@ -2,6 +2,7 @@ const express = require('express');
 const Razorpay = require('razorpay');
 const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
+
 const crypto = require('crypto'); // For signature verification
 const Payment = require('../models/Payment');
 
@@ -122,6 +123,37 @@ router.post('/save', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("Manual payment save error:", err);
     res.status(500).json({ error: 'Failed to save payment' });
+  }
+});
+
+
+
+
+
+
+
+// Add this route in your payments router (e.g., routes/payments.js)
+// you already have this
+const adminCheckMiddleware = (req, res, next) => {
+  // Basic admin check — you can customize based on your user schema
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ error: 'Forbidden: Admins only' });
+  }
+  next();
+};
+
+router.get('/', authMiddleware, adminCheckMiddleware, async (req, res) => {
+  try {
+    // Return all payments, populate booking & user info if needed
+    const payments = await Payment.find()
+      .populate('booking', 'room checkInDate checkOutDate')
+      .populate('user', 'name email')
+      .sort({ createdAt: -1 });
+
+    res.json(payments);
+  } catch (err) {
+    console.error('Error fetching all payments:', err);
+    res.status(500).json({ error: 'Failed to fetch payments' });
   }
 });
 

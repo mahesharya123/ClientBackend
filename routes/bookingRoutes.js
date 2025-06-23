@@ -119,7 +119,7 @@ Thank you for your payment.
 
 Details:
 - Booking ID: ${booking._id}
-- Amount Paid: ₹${(amountPaid / 100).toFixed(2)}
+- Amount Paid: ₹${(amountPaid ).toFixed(2)}
 - Transaction ID: ${paymentId}
 - Status: Confirmed
 
