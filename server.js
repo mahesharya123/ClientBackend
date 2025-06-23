@@ -14,6 +14,10 @@ app.use(express.json());
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/auth', authRoutes);
 
+const userRoutes = require('./routes/userRoutes');
+app.use('/api/users', userRoutes);
+
+
 app.get('/', (req, res) => {
   res.send('Hotel Booking API is running...');
 });
@@ -31,6 +35,7 @@ app.use('/uploads', express.static('uploads'));
 const availabilityRoutes = require('./routes/availabilityRoutes');
 app.use('/api/availability', availabilityRoutes);
 app.set('trust proxy', true);
+
 
 
 const menuRoutes = require('./routes/menuRoutes');

@@ -102,4 +102,28 @@ router.get('/user', authMiddleware, async (req, res) => {
   }
 });
 
+
+// Save Payment manually after success (if not using webhook)
+router.post('/save', authMiddleware, async (req, res) => {
+  try {
+    const { razorpayPaymentId, amountPaid, booking, status } = req.body;
+
+    const payment = new Payment({
+      razorpayPaymentId,
+      amountPaid,
+      booking,
+      status: status || 'successful',
+      user: req.user.id
+    });
+
+    await payment.save();
+
+    res.status(201).json({ message: 'Payment recorded', payment });
+  } catch (err) {
+    console.error("Manual payment save error:", err);
+    res.status(500).json({ error: 'Failed to save payment' });
+  }
+});
+
+
 module.exports = router;

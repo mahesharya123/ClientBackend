@@ -3,21 +3,20 @@ const router = express.Router();
 const Booking = require('../models/Booking');
 const authMiddleware = require('../middleware/authMiddleware');
 const adminOnly = require('../middleware/adminMiddleware');
-const Room = require('../models/Room'); // Make sure Room model is imported
-const Payment = require('../models/Payment')
+const Room = require('../models/Room');
+const Payment = require('../models/Payment');
+const User = require('../models/User');
+const { sendEmail } = require('../utils/sendEmail'); // ✅ Use your own utility
 
+// ➤ Create booking (no email here)
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    console.log("Body:", req.body);
-    console.log("User:", req.user);
+    const { room, checkInDate, checkOutDate, guests, totalPrice, paymentMethod } = req.body;
 
-   const { room, checkInDate, checkOutDate, guests, totalPrice, paymentMethod } = req.body;
+    if (!room || !checkInDate || !checkOutDate || !guests || !totalPrice || !paymentMethod) {
+      return res.status(400).json({ error: 'Missing booking details' });
+    }
 
-if (!room || !checkInDate || !checkOutDate || !guests || !totalPrice || !paymentMethod) {
-  return res.status(400).json({ error: 'Missing booking details' });
-}
-
-    // ✅ Check if room exists
     const existingRoom = await Room.findById(room);
     if (!existingRoom) {
       return res.status(404).json({ error: 'Room not found' });
@@ -25,14 +24,13 @@ if (!room || !checkInDate || !checkOutDate || !guests || !totalPrice || !payment
 
     const booking = await Booking.create({
       user: req.user.id,
-  room,
-  checkInDate,
-  checkOutDate,
-  guests,
-  totalPrice,
-  paymentMethod
+      room,
+      checkInDate,
+      checkOutDate,
+      guests,
+      totalPrice,
+      paymentMethod
     });
-           console.log("Incoming booking body:", req.body);
 
     res.status(201).json({ message: 'Booking successful', booking });
   } catch (err) {
@@ -41,9 +39,7 @@ if (!room || !checkInDate || !checkOutDate || !guests || !totalPrice || !payment
   }
 });
 
-// Middleware to check if user is admin
-
-// GET all bookings - Admin only
+// ➤ Admin: Get all bookings
 router.get('/', authMiddleware, adminOnly, async (req, res) => {
   try {
     const bookings = await Booking.find()
@@ -68,16 +64,11 @@ router.get('/', authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-
-// 👤 Get Bookings for Logged-in User
-
+// ➤ User: Get own bookings
 router.get('/user', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const bookings = await Booking.find({ user: userId })
-      .populate('room', 'roomType pricePerNight') // ✅ Only include selected fields
- // includes roomType, price, etc.
+    const bookings = await Booking.find({ user: req.user.id })
+      .populate('room', 'roomType pricePerNight')
       .sort({ createdAt: -1 });
 
     res.json(bookings);
@@ -87,19 +78,89 @@ router.get('/user', authMiddleware, async (req, res) => {
   }
 });
 
+// ➤ Payment Success: Update status + send email
+    // update path if needed
 
 router.patch('/:id/pay-success', authMiddleware, async (req, res) => {
-  const { isPaid, status } = req.body;
+  const { isPaid, status, paymentId, amountPaid } = req.body;
+
   try {
+    // 1. Update Booking with isPaid and status
     const booking = await Booking.findByIdAndUpdate(
       req.params.id,
-      { isPaid, status},
+      { isPaid, status },
       { new: true }
-    );
-    res.status(200).json(booking);
+    ).populate('room').populate('user');
+
+    if (!booking || !booking.user || !booking.user.email) {
+      return res.status(404).json({ error: 'Booking or user email not found' });
+    }
+
+    const user = booking.user;
+
+    // 2. Save payment record
+    const payment = new Payment({
+      user: user._id,
+      booking: booking._id,
+      razorpayPaymentId: paymentId,
+      amountPaid: amountPaid, // in paise
+      status: 'successful'
+    });
+
+    await payment.save();
+
+    // 3. Send email with transaction details
+    await sendEmail({
+      to: user.email,
+      subject: 'Booking Payment Successful',
+      text: `Dear ${user.name},
+
+Thank you for your payment.
+
+Details:
+- Booking ID: ${booking._id}
+- Amount Paid: ₹${(amountPaid / 100).toFixed(2)}
+- Transaction ID: ${paymentId}
+- Status: Confirmed
+
+We look forward to hosting you!
+
+Regards,
+Coral Creek Resort`
+    });
+
+    return res.status(200).json(booking);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update booking payment status" });
+    console.error('❌ Error in /pay-success route:', err);
+    return res.status(500).json({ error: 'Failed to update booking payment status' });
+  }
+});
+
+// ➤ Cancel Booking + send email
+router.patch('/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id).populate('room');
+    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+    if (!req.user.isAdmin && booking.user.toString() !== req.user.id) {
+      return res.status(403).json({ error: 'Not authorized to cancel this booking' });
+    }
+
+    booking.status = 'Cancelled';
+    await booking.save();
+
+    const user = await User.findById(booking.user);
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Booking Cancelled - Coral Creek Resort',
+      text: `Hi ${user.name},\n\nYour booking for ${booking.room.roomType} from ${booking.checkInDate.toDateString()} to ${booking.checkOutDate.toDateString()} has been cancelled.\n\n50% refund will be processed within 7 days if applicable.`
+    });
+
+    res.json({ message: 'Booking cancelled successfully', booking });
+  } catch (err) {
+    console.error('Cancel Booking Error:', err);
+    res.status(500).json({ error: 'Server error while cancelling booking' });
   }
 });
 
