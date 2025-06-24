@@ -57,7 +57,6 @@ router.post('/send-mobile-otp', (req, res) => {
   res.status(200).json({ message: 'Mobile OTP sent (mock)' });
 });
 // Register User with OTP Verification
-
 router.post('/register', async (req, res) => {
   try {
     const { name, mobile, email, password, confirmPassword, emailVerified } = req.body;
@@ -71,9 +70,15 @@ router.post('/register', async (req, res) => {
     if (password !== confirmPassword)
       return res.status(400).json({ error: "Passwords do not match" });
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ error: "User already exists" });
+    // ✅ Check for existing email
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail)
+      return res.status(400).json({ error: "Email already registered" });
+
+    // ✅ Check for existing mobile
+    const existingMobile = await User.findOne({ mobile });
+    if (existingMobile)
+      return res.status(400).json({ error: "Mobile number already registered" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -82,7 +87,7 @@ router.post('/register', async (req, res) => {
       mobile,
       email,
       password: hashedPassword,
-      isVerified: true   // ✅ mark email as verified in DB
+      isVerified: true
     });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
