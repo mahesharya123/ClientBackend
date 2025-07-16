@@ -3,13 +3,15 @@ const Room = require('../models/Room');
 const authMiddleware = require('../middleware/authMiddleware');
 const adminOnly = require('../middleware/adminMiddleware');
 const upload = require('../middleware/upload'); // Multer middleware
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
 // ➕ Create Room (Admin Only + Image Upload)
 router.post('/', authMiddleware, adminOnly, upload.array('images', 5), async (req, res) => {
   try {
-    const { hotelName, roomType, pricePerNight, features, location,city } = req.body;
+    const { hotelName, roomType, pricePerNight, features, location, city } = req.body;
 
     const imagePaths = req.files.map(file => `/uploads/${file.filename}`);
 
@@ -47,8 +49,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-
-
 // 📥 Get Single Room by ID (Public)
 router.get('/:id', async (req, res) => {
   try {
@@ -69,23 +69,99 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const updateData = { ...req.body };
-   if (typeof updateData.features === 'string') {
-  updateData.features = updateData.features.split(',').map(f => f.trim());
+// FIXED: Correct uploads directory path
+const projectRoot = process.cwd();
+const UPLOADS_DIR = path.join(projectRoot, 'uploads');
+
+
+// Ensure uploads directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  console.log(`Created uploads directory: ${UPLOADS_DIR}`);
 }
 
+// Utility function for safe file deletion
+const safeDelete = (filePath) => {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(filePath)) {
+      console.warn(`File not found: ${filePath}`);
+      return resolve(false);
+    }
 
-    const room = await Room.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error(`Deletion failed: ${filePath}`, err);
+        resolve(false);
+      } else {
+        console.log(`Deleted: ${filePath}`);
+        resolve(true);
+      }
+    });
+  });
+};
+// Update the PUT route
+// Update the PUT route for room updates
+router.put('/:id', authMiddleware, adminOnly, upload.single('replacementImage'), async (req, res) => {
+  try {
+    const { replaceIndex, ...updateData } = req.body;
+    const room = await Room.findById(req.params.id);
+    
     if (!room) return res.status(404).json({ error: 'Room not found' });
-    res.json(room);
+    if (!room.images || room.images.length !== 4) {
+      return res.status(400).json({ error: 'Room must have exactly 4 images' });
+    }
+
+    // Process replacement if requested
+    if (replaceIndex !== undefined && req.file) {
+      const index = parseInt(replaceIndex);
+      
+      // Validate index
+      if (isNaN(index) || index < 0 || index >= room.images.length) {
+        // Delete uploaded file if index is invalid
+        const filePath = path.join(UPLOADS_DIR, req.file.filename);
+        await safeDelete(filePath);
+        return res.status(400).json({ error: 'Invalid image index' });
+      }
+
+      // Get current image path
+      const oldImagePath = room.images[index];
+      const oldFilename = oldImagePath.split('/uploads/').pop();
+      
+      // Update image at specific index
+      const newImagePath = `/uploads/${req.file.filename}`;
+      room.images[index] = newImagePath;
+
+      // Delete old file after successful update
+      const updatedRoom = await room.save();
+      
+      // Delete old image file
+      if (oldFilename) {
+        const oldFilePath = path.join(UPLOADS_DIR, oldFilename);
+        await safeDelete(oldFilePath);
+      }
+
+      return res.json(updatedRoom);
+    }
+
+    // Process other updates (non-image changes)
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined && key !== 'replaceIndex') {
+        room[key] = updateData[key];
+      }
+    });
+
+    const updatedRoom = await room.save();
+    res.json(updatedRoom);
+    
   } catch (err) {
+    // Clean up uploaded file if error occurred
+    if (req.file) {
+      const filePath = path.join(UPLOADS_DIR, req.file.filename);
+      await safeDelete(filePath);
+    }
     res.status(500).json({ error: 'Failed to update room', details: err.message });
   }
 });
-
-
 // ❌ Delete Room (Admin Only)
 router.delete('/:id', authMiddleware, adminOnly, async (req, res) => {
   try {

@@ -36,7 +36,7 @@ const bookingSchema = new mongoose.Schema({
   },
 paymentMethod: {
   type: String,
-  enum: ['Pay Full Amount', 'Pay Half Amount'], // ✅ Corrected
+  enum: ['Pay Full Amount', 'Pay Half Amount'], // ✅ Add UPI here
   default: 'Pay Full Amount'
 },
 
