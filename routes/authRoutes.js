@@ -5,14 +5,24 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const OTP = require('../models/Otp');
 const { sendEmail } = require('../utils/sendEmail');
-const { sendSMS } = require('../utils/sendSMS');
+
 
 const router = express.Router();
 
 // Send Email OTP
 // In-memory storage for OTPs (for demo; use Redis in production)
+
+
 const emailOtpMap = new Map();
 const mobileOtpMap = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, otpData] of emailOtpMap.entries()) {
+    if (otpData.expiresAt < now) {
+      emailOtpMap.delete(email);
+    }
+  }
+}, 5 * 60 * 1000); // cleanup every 5 minutes
 const {
   sendEmailOtpController,
   verifyEmailOtpController,
@@ -143,5 +153,82 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+
+
+
+
+// FORGOT PASSWORD - Send OTP to email
+// FORGOT PASSWORD - Send OTP to email
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ error: 'User not found. Please register first.' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // OTP valid for 10 minutes
+
+    emailOtpMap.set(email, { otp, expiresAt });
+
+    await sendEmail({
+      to: email,
+      subject: 'Password Reset OTP - Coral Creek',
+      text: `Your password reset OTP is: ${otp}. It will expire in 10 minutes.`,
+    });
+
+    res.status(200).json({ message: 'OTP sent to your registered email' });
+  } catch (error) {
+    console.error('Forgot Password Error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+
+// RESET PASSWORD - Verify OTP and update password
+  // RESET PASSWORD - Verify OTP and update password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword, confirmPassword } = req.body;
+
+    if (!email || !otp || !newPassword || !confirmPassword)
+      return res.status(400).json({ error: 'All fields are required' });
+
+    if (newPassword !== confirmPassword)
+      return res.status(400).json({ error: 'Passwords do not match' });
+
+    const otpData = emailOtpMap.get(email);
+
+    if (!otpData)
+      return res.status(400).json({ error: 'OTP not found. Please request again.' });
+
+    if (Date.now() > otpData.expiresAt)
+      return res.status(400).json({ error: 'OTP expired. Please request a new one.' });
+
+    if (otpData.otp !== otp)
+      return res.status(400).json({ error: 'Invalid OTP' });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ error: 'User not found' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    // clear OTP after successful reset
+    emailOtpMap.delete(email);
+
+    res.status(200).json({ message: 'Password reset successful. Please login again.' });
+  } catch (error) {
+    console.error('Reset Password Error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 
 module.exports = router;
