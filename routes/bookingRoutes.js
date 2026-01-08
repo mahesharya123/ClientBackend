@@ -82,7 +82,7 @@ router.get('/user', authMiddleware, async (req, res) => {
     // update path if needed
 
 router.patch('/:id/pay-success', authMiddleware, async (req, res) => {
-  const { isPaid, status, paymentId, amountPaid,paymentMethod} = req.body;
+  const { isPaid, status, paymentId, amountPaid} = req.body;
 
   try {
     // 1. Update Booking with isPaid and status
@@ -120,7 +120,6 @@ Thank you for your payment.
 Details:
 - Booking ID: ${booking._id}
 - Amount Paid: ₹${(amountPaid ).toFixed(2)}
-- Payment Half/Full: ${paymentMethod}
 - Transaction ID: ${paymentId}
 - CheckIn Date : ${booking.checkInDate.toDateString()}
 - CheckOut Date : ${booking.checkOutDate.toDateString()}
