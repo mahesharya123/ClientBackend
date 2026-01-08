@@ -11,7 +11,7 @@ router.post('/', async (req, res) => {
 
     // Send email to admin
     await sendEmail({
-      to: 'mahesharya381@gmail.com', // Replace with your real email
+      to: 'coralcreekresortbg@gmail.com', // Replace with your real email
       subject: `New Contact Message from ${req.body.name}`,
       text: `
 Name: ${req.body.name}
